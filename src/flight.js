@@ -5,10 +5,11 @@ export class Aircraft {
   constructor() {
     this.group = new THREE.Object3D();      // 位置と姿勢(quaternion)を保持
     this.velocity = new THREE.Vector3();
-    this.speed = 260;                        // 前進速度(スロットル制御)
+    this.speed = 260;                        // 現在の対気速度(velocity から算出・HUD表示)
     this.minSpeed = 90;
     this.maxSpeed = 700;
     this.throttle = 0.45;                    // 0..1
+    this.gravity = 110;                      // 重力加速度(積分される)
     this.hp = 100;
     this.alive = true;
 
@@ -24,6 +25,7 @@ export class Aircraft {
     this.group.quaternion.identity();
     this.throttle = 0.45;
     this.speed = 260;
+    this.velocity.set(0, 0, -this.speed); // 機首方向(-Z)へ初速を与える(スポーン即墜落を防ぐ)
     this.hp = 100;
     this.alive = true;
     this.mesh.visible = true;
@@ -38,14 +40,13 @@ export class Aircraft {
     if (input.down('ControlLeft') || input.down('ControlRight')) this.throttle -= dt * 0.6;
     this.throttle = clamp(this.throttle, 0, 1);
     const targetSpeed = this.minSpeed + (this.maxSpeed - this.minSpeed) * this.throttle;
-    this.speed += (targetSpeed - this.speed) * Math.min(1, dt * 0.8);
 
     // --- 姿勢入力(ローカル軸まわりの角速度) ---
     const pitchRate = 1.25, rollRate = 2.0, yawRate = 0.8;
     let pitch = 0, roll = 0, yaw = 0;
 
-    if (input.down('KeyW') || input.down('ArrowUp')) pitch += 1;    // 機首下げ
-    if (input.down('KeyS') || input.down('ArrowDown')) pitch -= 1;  // 機首上げ
+    if (input.down('KeyW') || input.down('ArrowUp')) pitch += 1;    // 機首上げ(上昇)
+    if (input.down('KeyS') || input.down('ArrowDown')) pitch -= 1;  // 機首下げ(降下)
     if (input.down('KeyA') || input.down('ArrowLeft')) roll += 1;
     if (input.down('KeyD') || input.down('ArrowRight')) roll -= 1;
     if (input.down('KeyQ')) yaw += 1;
@@ -60,13 +61,28 @@ export class Aircraft {
     q.multiply(qFromAxis(0, 0, 1, roll * rollRate * dt));
     q.multiply(qFromAxis(0, 1, 0, yaw * yawRate * dt));
 
-    // --- 擬似空力: 機首方向へ進む + 軽い重力/揚力 ---
+    // --- 物理: 推力・重力・揚力(擬似空力)を velocity に積分 ---
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-    this.velocity.copy(forward).multiplyScalar(this.speed);
-    // 速度が高いほど重力の影響が小さく感じる簡易揚力
-    const gravity = 130 * clamp(1 - this.speed / this.maxSpeed, 0.15, 1);
-    this.velocity.y -= gravity;
 
+    // 1. 推力: 機首方向の対気速度を目標速度へ近づける
+    const airspeed = this.velocity.dot(forward);
+    const thrust = (targetSpeed - airspeed) * 0.9;
+    this.velocity.addScaledVector(forward, thrust * dt);
+
+    // 2. 重力: 常に下向きに加速(積分されるので降下は加速し、上昇は減速する)
+    this.velocity.y -= this.gravity * dt;
+
+    // 3. 揚力/空力: 速度ベクトルを機首方向へ引き戻す。
+    //    高速ほど効きが強く高度を保ち、低速では重力に負けて失速・降下する。
+    const speed = this.velocity.length();
+    const aero = clamp(speed / 280, 0, 1) * 3.5;
+    const desired = forward.clone().multiplyScalar(speed);
+    this.velocity.lerp(desired, clamp(aero * dt, 0, 1));
+
+    // 4. 抗力
+    this.velocity.multiplyScalar(1 - 0.03 * dt);
+
+    this.speed = this.velocity.length(); // HUD 表示・弾速に反映
     this.group.position.addScaledVector(this.velocity, dt);
 
     // --- 地面衝突 ---
