@@ -27,6 +27,7 @@ Three.js は CDN(unpkg)から読み込むため、初回はネット接続が必
 | マウス | 機首エイム(微調整・要ポインタロック) |
 | C | 視点切替(コックピット内 / HUD のみ) |
 | R | リスポーン |
+| M | サウンド ミュート切替 |
 | Esc | 一時停止 |
 
 ## 特徴
@@ -36,6 +37,7 @@ Three.js は CDN(unpkg)から読み込むため、初回はネット接続が必
 - 2 種の POV(コックピット内視点 / 没入 HUD)
 - HUD: 速度・高度・方位テープ・スロットル・耐久・照準・レーダー・敵ロック/方向マーカー
 - 敵機 AI(追尾・回避・射撃)と撃墜爆散エフェクト
+- 手続き的サウンド(Web Audio・外部ファイル不要): スロットル/速度追従のエンジン音、機銃・爆発・被弾 SFX
 
 ## 構成
 
@@ -46,6 +48,7 @@ Three.js は CDN(unpkg)から読み込むため、初回はネット接続が必
 - `src/enemies.js` — 敵機生成・AI
 - `src/weapons.js` — 射撃・当たり判定・爆散
 - `src/hud.js` — HUD/計器描画(Canvas 2D)
+- `src/audio.js` — 手続き的サウンド(Web Audio)
 - `src/input.js` — キーボード/マウス入力
 
 設計メモ: [docs/superpowers/specs/2026-07-21-pov-jet-sim-design.md](docs/superpowers/specs/2026-07-21-pov-jet-sim-design.md)

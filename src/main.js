@@ -5,6 +5,7 @@ import { Aircraft } from './flight.js';
 import { Enemies } from './enemies.js';
 import { Weapons } from './weapons.js';
 import { HUD } from './hud.js';
+import { Sound } from './audio.js';
 
 // --- レンダラ / シーン ---
 const appEl = document.getElementById('app');
@@ -32,6 +33,12 @@ const enemies = new Enemies(scene, weapons);
 const input = new Input(renderer.domElement);
 const hudCanvas = document.getElementById('hud');
 const hud = new HUD(hudCanvas, camera);
+const sound = new Sound();
+
+// サウンドのイベント検出用に前フレームの状態を保持
+let prevKills = 0;
+let prevHp = 100;
+let wasAlive = true;
 
 let cockpitView = true; // true=コックピット内, false=HUD のみ(機首後方)
 let started = false;    // 開始したか(ポインタロックとは独立)
@@ -41,6 +48,7 @@ const overlay = document.getElementById('overlay');
 overlay.addEventListener('click', () => {
   started = true;
   overlay.classList.add('hidden');
+  sound.init();        // AudioContext はユーザー操作で開始する必要がある
   input.requestLock(); // マウスエイム用。失敗してもゲームは進行する
 });
 // Esc で一時停止(ポインタロック解除時)。ゲーム状態は保持
@@ -87,22 +95,40 @@ function loop() {
 
   // 視点切替
   if (input.pressed('KeyC')) cockpitView = !cockpitView;
+  // ミュート切替
+  if (input.pressed('KeyM')) sound.toggleMute();
   // リスポーン
   if (input.pressed('KeyR') && !player.alive) {
     player.reset();
     started = true;
+    prevHp = player.hp;
     overlay.classList.add('hidden');
+    sound.init();
     input.requestLock();
   }
 
   if (active) {
     player.update(dt, input, terrain);
-    if (input.down('Space') || input.firing) weapons.playerFire(player);
+    if (input.down('Space') || input.firing) {
+      if (weapons.playerFire(player)) sound.gun(); // 発射したフレームだけ鳴らす
+    }
   }
 
   enemies.update(dt, player);
   weapons.update(dt, enemies, player);
   terrain.follow(player.group.position.x, player.group.position.z);
+
+  // --- サウンド: エンジン + イベント検出 ---
+  if (active) {
+    sound.updateEngine(player.throttle, Math.min(player.speed / player.maxSpeed, 1));
+  } else {
+    sound.engineOff();
+  }
+  if (enemies.kills > prevKills) { sound.explosion(); prevKills = enemies.kills; }
+  if (player.hp < prevHp) { sound.hit(); prevHp = player.hp; }
+  prevHp = Math.max(prevHp, player.hp); // リスポーン等で回復したら追従
+  if (wasAlive && !player.alive) sound.explosion(); // 撃墜された瞬間
+  wasAlive = player.alive;
 
   updateCamera(dt);
   input.decay(dt);

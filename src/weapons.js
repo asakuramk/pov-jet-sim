@@ -21,8 +21,9 @@ export class Weapons {
     this.bullets.push({ mesh, vel, life: 2.2, fromPlayer });
   }
 
+  // 実際に発射したら true(サウンドのトリガに使う)
   playerFire(aircraft) {
-    if (this.playerCooldown > 0) return;
+    if (this.playerCooldown > 0) return false;
     this.playerCooldown = 0.09;
     const q = aircraft.group.quaternion;
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
@@ -36,6 +37,7 @@ export class Weapons {
     mesh.position.copy(origin);
     this.scene.add(mesh);
     this.bullets.push({ mesh, vel, life: 2.2, fromPlayer: true });
+    return true;
   }
 
   // 爆散: ワイヤー破片を飛散
